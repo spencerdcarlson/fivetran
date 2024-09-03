@@ -1,0 +1,6 @@
+services:
+  fivetran:
+    build: .
+    environment:
+      - API_KEY=${API_KEY}
+      - API_SECRET=${API_SECRET}
