@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fivetran/api"
 	"fivetran/args"
+	"fivetran/cmd"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,9 @@ import (
 )
 
 func main() {
+	cmd.Execute()
+	os.Exit(0)
+
 	values, err := args.Parse()
 
 	if err != nil {
