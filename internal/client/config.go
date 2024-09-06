@@ -1,20 +1,8 @@
-package config
+package client
 
-import "sync"
-
-type Flags struct {
-	RefreshRate   *int
-	LogLevel      *string
-	LogFile       *string
-	Headless      *bool
-	Logoless      *bool
-	Command       *string
-	AllNamespaces *bool
-	ReadOnly      *bool
-	Write         *bool
-	Crumbsless    *bool
-	ScreenDumpDir *string
-}
+import (
+	"sync"
+)
 
 // ConfigFlags composes the set of values necessary
 // for obtaining a REST client config
@@ -67,4 +55,15 @@ type ConfigFlags struct {
 	// Allows all possible warnings are printed in a standardized
 	// format.
 	//warningPrinter *printers.WarningPrinter
+}
+
+type Config struct {
+	flags *ConfigFlags
+	mx    sync.RWMutex
+}
+
+func NewConfig(f *ConfigFlags) *Config {
+	return &Config{
+		flags: f,
+	}
 }

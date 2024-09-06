@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fivetran/internal/color"
+	"fivetran/internal/config"
 	"fivetran/internal/ui"
 	"fmt"
 	"github.com/spf13/cobra"
@@ -23,9 +24,9 @@ func infoCmd() *cobra.Command {
 }
 
 func printInfo(cmd *cobra.Command, args []string) error {
-	//if err := config.InitLocs(); err != nil {
-	//	return err
-	//}
+	if err := config.InitLocs(); err != nil {
+		return err
+	}
 
 	const fmat = "%-27s %s\n"
 	printLogo(color.Cyan)

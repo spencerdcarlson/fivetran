@@ -1,6 +1,5 @@
 package ui
 
-// LogoSmall K9s small log.
 var LogoSmall = []string{
 	` ___ _____   _____ _____ ___   _   _  _`,
 	`| __|_ _\ \ / | __|_   _| _ \ /_\ | \| |`,
