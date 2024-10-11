@@ -2,8 +2,22 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/url"
 )
+
+type ResponseType int
+
+const (
+	GroupsResponseType ResponseType = iota
+	Green
+	Blue
+)
+
+type Response struct {
+	Type           ResponseType
+	GroupsResponse GroupsResponse
+}
 
 type GroupItem struct {
 	Id        string `json:"id"`
@@ -16,7 +30,7 @@ type GroupsData struct {
 }
 
 type GroupsResponse struct {
-	Code string     `json:"code"`
+	Code CodeType   `json:"code"`
 	Data GroupsData `json:"data"`
 }
 
@@ -66,6 +80,44 @@ type ConnectorSyncRequest struct {
 type ConnectorSyncResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+type GenericResponse struct {
+	Code    CodeType `json:"code"`
+	Message string   `json:"message"`
+}
+
+type CodeType string
+
+const (
+	NotFound   CodeType = "NotFound"
+	AuthFailed CodeType = "AuthFailed"
+	Success    CodeType = "Success"
+)
+
+type CodeTypeInfo struct {
+	IsError bool
+}
+
+var validCodes = map[CodeType]CodeTypeInfo{
+	NotFound:   {IsError: true},
+	AuthFailed: {IsError: true},
+	Success:    {IsError: false},
+}
+
+func (c *CodeType) UnmarshalJSON(b []byte) error {
+	var codeStr string
+	if err := json.Unmarshal(b, &codeStr); err != nil {
+		return err
+	}
+
+	codeType := CodeType(codeStr)
+	if _, ok := validCodes[codeType]; !ok {
+		return errors.New("invalid code type: " + codeStr)
+	}
+
+	*c = codeType
+	return nil
 }
 
 func (cc *ConnectorConfig) UnmarshalJSON(data []byte) error {

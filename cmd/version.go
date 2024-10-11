@@ -1,10 +1,64 @@
 package cmd
 
 import (
+	"errors"
+	"fivetran/api"
 	"fivetran/internal/color"
 	"fmt"
 	"github.com/spf13/cobra"
 )
+
+func listCmd() *cobra.Command {
+	var key string
+	command := cobra.Command{
+		Use:   "list",
+		Short: "List resource",
+		Long:  "List API resources",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if resource, ok := cmd.Parent().Annotations["resource"]; ok {
+				response, err := api.ListResource(key, resource)
+				if err != nil {
+					return err
+				}
+				println(fmt.Sprintf("Response: %+v", response))
+				if response.Type == api.GroupsResponseType {
+					println(fmt.Sprintf("GroupsResponse: %+v", response.GroupsResponse))
+					for i := range response.GroupsResponse.Data.Items {
+						println(fmt.Sprintf("Item: %+v", response.GroupsResponse.Data.Items[i]))
+					}
+				}
+
+				return nil
+			} else {
+				return errors.New("no resource")
+			}
+		},
+	}
+	command.PersistentFlags().StringVar(&key, "key", "", "API key")
+	return &command
+}
+
+func groupCmd() *cobra.Command {
+	var short bool
+
+	command := cobra.Command{
+		Use: "group [command]",
+		//Annotations: map[string]string{"resource": "causeError"},
+		Annotations: map[string]string{"resource": "groups"},
+		Short:       "Group resource",
+		Long:        "Group resource root command",
+		Run: func(cmd *cobra.Command, args []string) {
+			printVersion(short)
+		},
+	}
+
+	command.AddCommand(listCmd())
+
+	// Sub command or flags
+	//command.PersistentFlags().BoolVarP(&short, "short", "s", false, "Prints version info in short format")
+
+	return &command
+}
 
 func versionCmd() *cobra.Command {
 	var short bool

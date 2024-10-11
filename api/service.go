@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -33,4 +34,32 @@ func ConnectorBySheetURL(responses []ConnectorResponse, substr string) (*Connect
 		}
 	}
 	return nil, errors.New(fmt.Sprintf("fivetran: '%s' Connector not found", substr))
+}
+
+func IsGenericError(response GenericResponse) bool {
+	info, ok := validCodes[response.Code]
+	if !ok {
+		return false
+	}
+	return info.IsError
+}
+
+func ListResource(key string, resource string) (*Response, error) {
+	auth, err := BuildAuth(key)
+	if err != nil {
+		return nil, err
+	}
+	body, err := List(auth, resource)
+	if err != nil {
+		return nil, err
+	}
+	if strings.ToLower(strings.TrimSpace(resource)) == "groups" {
+		var response GroupsResponse
+		err = json.Unmarshal(body, &response)
+		if err != nil {
+			return nil, err
+		}
+		return &Response{Type: GroupsResponseType, GroupsResponse: response}, nil
+	}
+	return nil, errors.New("fivetran: resource not supported")
 }

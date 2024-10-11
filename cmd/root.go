@@ -52,7 +52,7 @@ func init() {
 	})
 
 	// Add commands
-	rootCmd.AddCommand(versionCmd(), infoCmd())
+	rootCmd.AddCommand(versionCmd(), infoCmd(), groupCmd())
 
 	// Add flags
 	initAppFlags()

@@ -4,11 +4,9 @@ import (
 	"errors"
 	"fivetran/internal/config/data"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 	"io/fs"
 	"os"
-	"path/filepath"
 )
 
 const (
@@ -88,32 +86,34 @@ func (c *Config) Save(force bool) error {
 		return err
 	}
 	if _, err := os.Stat(AppConfigFile); errors.Is(err, fs.ErrNotExist) {
-		return c.SaveFile(AppConfigFile)
+		//return c.SaveFile(AppConfigFile)
+		return nil
 	}
 
 	return nil
 }
 
 func (f *FivetranConfig) Save(force bool) error {
-	if f.getActiveConfig() == nil {
-		log.Warn().Msgf("Save failed. no active config detected")
-		return nil
-	}
-	path := filepath.Join(
-		AppContextsDir,
-		data.SanitizeContextSubpath(f.activeConfig.Context.GetClusterName(), f.getActiveContextName()),
-		data.MainConfigFile,
-	)
-	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) || force {
-		return f.dir.Save(path, f.getActiveConfig())
-	}
+	//if f.getActiveConfig() == nil {
+	//	log.Warn().Msgf("Save failed. no active config detected")
+	//	return nil
+	//}
+	//path := filepath.Join(
+	//	AppContextsDir,
+	//	data.SanitizeContextSubpath(f.activeConfig.Context.GetClusterName(), f.getActiveContextName()),
+	//	data.MainConfigFile,
+	//)
+	//path := "./"
+	//if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) || force {
+	//	return f.dir.Save(path, f.getActiveConfig())
+	//}
 
 	return nil
 }
 
-func (f *FivetranConfig) getActiveConfig() *data.Config {
-	//f.mx.RLock()
-	//defer f.mx.RUnlock()
-
-	return f.activeConfig
-}
+//func (f *FivetranConfig) getActiveConfig() *data.Config {
+//	//f.mx.RLock()
+//	//defer f.mx.RUnlock()
+//
+//	return f.activeConfig
+//}
