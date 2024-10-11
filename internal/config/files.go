@@ -2,6 +2,7 @@ package config
 
 import (
 	"fivetran/internal/config/data"
+	"fmt"
 	"github.com/adrg/xdg"
 	"github.com/rs/zerolog/log"
 	"os"
@@ -43,18 +44,21 @@ func InitLogLoc() error {
 	}
 	AppLogFile = filepath.Join(appLogDir, FivetranLogsFile)
 
+	//fmt.Printf("Logging file %s\n", AppLogFile)
+
 	return nil
 }
 
-func InitLocs() error {
+func InitFileLocations() error {
 	if isEnvSet(FivetranEnvConfigDir) {
-		return initAppEnvLocs()
+		return initEnvLocations()
 	}
 
-	return initXDGLocs()
+	return initXDGLocations()
 }
 
-func initAppEnvLocs() error {
+// Initialize file locations using ENVs
+func initEnvLocations() error {
 	AppConfigDir = os.Getenv(FivetranEnvConfigDir)
 	if err := data.EnsureFullPath(AppConfigDir, data.DefaultDirMod); err != nil {
 		return err
@@ -83,10 +87,13 @@ func initAppEnvLocs() error {
 	AppPluginsFile = filepath.Join(AppConfigDir, "plugins.yaml")
 	AppViewsFile = filepath.Join(AppConfigDir, "views.yaml")
 
+	fmt.Printf("Using ENV AppConfigFile locations. AppConfigFile: %s\n", AppConfigFile)
 	return nil
 }
 
-func initXDGLocs() error {
+// Initialize file locations using XDG Base Directory Specification
+// User's home directory
+func initXDGLocations() error {
 	var err error
 
 	AppConfigDir, err = xdg.ConfigFile(AppName)
@@ -128,6 +135,7 @@ func initXDGLocs() error {
 		log.Warn().Err(err).Msgf("No context dir detected")
 	}
 
+	fmt.Printf("Using XDG AppConfigFile locations. AppConfigFile: %s\n", AppConfigFile)
 	return nil
 }
 

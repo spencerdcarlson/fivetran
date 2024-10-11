@@ -18,13 +18,13 @@ import (
 const (
 	appName      = config.AppName
 	shortAppDesc = "A graphical CLI for fivetran management."
-	longAppDesc  = "Fivetran is a CLI to view and manage your fivetran account."
+	longAppDesc  = "FivetranConfig is a CLI to view and manage your fivetran account."
 )
 
 var (
 	version, commit, date = "dev", "dev", client.NA
 	appFlags              *config.Flags
-	k8sFlags              *client.ConfigFlags
+	clientFlags           *client.Flags
 
 	rootCmd = &cobra.Command{
 		Use:   appName,
@@ -44,14 +44,17 @@ func (e flagError) Error() string { return e.err.Error() }
 
 func init() {
 	if err := config.InitLogLoc(); err != nil {
-		fmt.Printf("Fail to init k9s logs location %s\n", err)
+		fmt.Printf("Fail to init logs location %s\n", err)
 	}
 
 	rootCmd.SetFlagErrorFunc(func(command *cobra.Command, err error) error {
 		return flagError{err: err}
 	})
 
+	// Add commands
 	rootCmd.AddCommand(versionCmd(), infoCmd())
+
+	// Add flags
 	initAppFlags()
 }
 
@@ -65,7 +68,7 @@ func Execute() {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	if err := config.InitLocs(); err != nil {
+	if err := config.InitFileLocations(); err != nil {
 		return err
 	}
 	file, err := os.OpenFile(
@@ -74,7 +77,7 @@ func run(cmd *cobra.Command, args []string) error {
 		data.DefaultFileMod,
 	)
 	if err != nil {
-		return fmt.Errorf("Log file %q init failed: %w", *appFlags.LogFile, err)
+		return fmt.Errorf("log file %q init failed: %w", *appFlags.LogFile, err)
 	}
 	defer func() {
 		if file != nil {
@@ -94,6 +97,9 @@ func run(cmd *cobra.Command, args []string) error {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: file})
 	zerolog.SetGlobalLevel(parseLevel(*appFlags.LogLevel))
 
+	//log.Info().Msg("starting up...")
+
+	loadConfiguration()
 	//cfg, err := loadConfiguration()
 	//if err != nil {
 	//	log.Error().Err(err).Msgf("Fail to load global/context configuration")
@@ -115,32 +121,25 @@ func run(cmd *cobra.Command, args []string) error {
 // func loadConfiguration() (*config.Config, error) {
 func loadConfiguration() (*config.Config, error) {
 	log.Info().Msg("starting up...")
-
-	// TODO: configure fivetran api client
-
-	//k8sCfg := client.NewConfig(k8sFlags)
-	//k9sCfg := config.NewConfig(k8sCfg)
-	//var errs error
-	//conn, err := client.InitConnection(k8sCfg)
-	//k9sCfg.SetConnection(conn)
-	//if err != nil {
-	//	errs = errors.Join(errs, err)
-	//}
-	//
-	//if err := k9sCfg.Load(config.AppConfigFile, false); err != nil {
-	//	errs = errors.Join(errs, err)
-	//}
-	//k9sCfg.K9s.Override(k9sFlags)
-	//if err := k9sCfg.Refine(k8sFlags, k9sFlags, k8sCfg); err != nil {
+	clientCfg := client.NewConfig(clientFlags)
+	fmt.Printf("k8sCfg %+v\n", clientCfg)
+	cfg := config.NewConfig(clientCfg)
+	var errs error
+	// This is where the yaml or json config file gets loaded!
+	if err := cfg.Load(config.AppConfigFile, false); err != nil {
+		errs = errors.Join(errs, err)
+	}
+	//k9sCfg.FivetranConfig.Override(k9sFlags)
+	//if err := k9sCfg.Refine(clientFlags, k9sFlags, k8sCfg); err != nil {
 	//	log.Error().Err(err).Msgf("config refine failed")
 	//	errs = errors.Join(errs, err)
 	//}
 	//// Try to access server version if that fail. Connectivity issue?
 	//if !conn.CheckConnectivity() {
-	//	errs = errors.Join(errs, fmt.Errorf("cannot connect to context: %s", k9sCfg.K9s.ActiveContextName()))
+	//	errs = errors.Join(errs, fmt.Errorf("cannot connect to context: %s", k9sCfg.FivetranConfig.ActiveContextName()))
 	//}
 	//if !conn.ConnectionOK() {
-	//	errs = errors.Join(errs, fmt.Errorf("k8s connection failed for context: %s", k9sCfg.K9s.ActiveContextName()))
+	//	errs = errors.Join(errs, fmt.Errorf("k8s connection failed for context: %s", k9sCfg.FivetranConfig.ActiveContextName()))
 	//}
 	//
 	//log.Info().Msg("✅ Kubernetes connectivity")
@@ -172,12 +171,6 @@ func parseLevel(level string) zerolog.Level {
 
 func initAppFlags() {
 	appFlags = config.NewFlags()
-	rootCmd.Flags().IntVarP(
-		appFlags.RefreshRate,
-		"refresh", "r",
-		config.DefaultRefreshRate,
-		"Specify the default refresh rate as an integer (sec)",
-	)
 	rootCmd.Flags().StringVarP(
 		appFlags.LogLevel,
 		"logLevel", "l",
@@ -189,54 +182,6 @@ func initAppFlags() {
 		"logFile", "",
 		config.AppLogFile,
 		"Specify the log file",
-	)
-	rootCmd.Flags().BoolVar(
-		appFlags.Headless,
-		"headless",
-		false,
-		"Turn K9s header off",
-	)
-	rootCmd.Flags().BoolVar(
-		appFlags.Logoless,
-		"logoless",
-		false,
-		"Turn K9s logo off",
-	)
-	rootCmd.Flags().BoolVar(
-		appFlags.Crumbsless,
-		"crumbsless",
-		false,
-		"Turn K9s crumbs off",
-	)
-	rootCmd.Flags().BoolVarP(
-		appFlags.AllNamespaces,
-		"all-namespaces", "A",
-		false,
-		"Launch K9s in all namespaces",
-	)
-	rootCmd.Flags().StringVarP(
-		appFlags.Command,
-		"command", "c",
-		config.DefaultCommand,
-		"Overrides the default resource to load when the application launches",
-	)
-	rootCmd.Flags().BoolVar(
-		appFlags.ReadOnly,
-		"readonly",
-		false,
-		"Sets readOnly mode by overriding readOnly configuration setting",
-	)
-	rootCmd.Flags().BoolVar(
-		appFlags.Write,
-		"write",
-		false,
-		"Sets write mode by overriding the readOnly configuration setting",
-	)
-	rootCmd.Flags().StringVar(
-		appFlags.ScreenDumpDir,
-		"screen-dump-dir",
-		"",
-		"Sets a path to a dir for a screen dumps",
 	)
 	rootCmd.Flags()
 }

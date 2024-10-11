@@ -44,32 +44,14 @@ var (
 )
 
 type Flags struct {
-	RefreshRate   *int
-	LogLevel      *string
-	LogFile       *string
-	Headless      *bool
-	Logoless      *bool
-	Command       *string
-	AllNamespaces *bool
-	ReadOnly      *bool
-	Write         *bool
-	Crumbsless    *bool
-	ScreenDumpDir *string
+	LogLevel *string
+	LogFile  *string
 }
 
 func NewFlags() *Flags {
 	return &Flags{
-		RefreshRate:   intPtr(DefaultRefreshRate),
-		LogLevel:      strPtr(DefaultLogLevel),
-		LogFile:       strPtr(AppLogFile),
-		Headless:      boolPtr(false),
-		Logoless:      boolPtr(false),
-		Command:       strPtr(DefaultCommand),
-		AllNamespaces: boolPtr(false),
-		ReadOnly:      boolPtr(false),
-		Write:         boolPtr(false),
-		Crumbsless:    boolPtr(false),
-		ScreenDumpDir: strPtr(AppDumpsDir),
+		LogLevel: strPtr(DefaultLogLevel),
+		LogFile:  strPtr(AppLogFile),
 	}
 }
 

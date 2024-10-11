@@ -1,73 +1,44 @@
 package config
 
 import (
-	"fivetran/internal/client"
+	"errors"
 	"fivetran/internal/config/data"
-	"sync"
+	"fmt"
+	"github.com/rs/zerolog/log"
+	"gopkg.in/yaml.v3"
+	"io/fs"
+	"os"
+	"path/filepath"
 )
 
 const (
-	defaultRefreshRate     = 2
-	defaultMaxConnRetry    = 5
 	DefaultLoggerTailCount = 100
 	MaxLogThreshold        = 5000
 	DefaultSinceSeconds    = -1 // tail logs by default
 )
 
-type K9s struct {
-	LiveViewAutoRefresh bool   `json:"liveViewAutoRefresh" yaml:"liveViewAutoRefresh"`
-	ScreenDumpDir       string `json:"screenDumpDir" yaml:"screenDumpDir,omitempty"`
-	RefreshRate         int    `json:"refreshRate" yaml:"refreshRate"`
-	MaxConnRetry        int    `json:"maxConnRetry" yaml:"maxConnRetry"`
-	ReadOnly            bool   `json:"readOnly" yaml:"readOnly"`
-	NoExitOnCtrlC       bool   `json:"noExitOnCtrlC" yaml:"noExitOnCtrlC"`
-	SkipLatestRevCheck  bool   `json:"skipLatestRevCheck" yaml:"skipLatestRevCheck"`
-	DisablePodCounting  bool   `json:"disablePodCounting" yaml:"disablePodCounting"`
-	//ShellPod            ShellPod   `json:"shellPod" yaml:"shellPod"`
-	//ImageScans          ImageScans `json:"imageScans" yaml:"imageScans"`
-	Logger Logger `json:"logger" yaml:"logger"`
-	//Thresholds          Threshold  `json:"thresholds" yaml:"thresholds"`
-	manualRefreshRate   int
-	manualHeadless      *bool
-	manualLogoless      *bool
-	manualCrumbsless    *bool
-	manualReadOnly      *bool
-	manualCommand       *string
-	manualScreenDumpDir *string
-	//dir                 *data.Dir
-	activeContextName string
-	//activeConfig        *data.Config
-	//conn                client.Connection
-	ks data.KubeSettings
-	mx sync.RWMutex
+type FivetranConfig struct {
+	DisablePodCounting bool   `json:"disablePodCounting" yaml:"disablePodCounting"`
+	Logger             Logger `json:"logger" yaml:"logger"`
+	clientSettings     data.ClientSettings
 }
 
 type Config struct {
-	K9s      *K9s `yaml:"k9s" json:"k9s"`
-	conn     client.Connection
-	settings data.KubeSettings
+	Fivetran       *FivetranConfig `yaml:"k9s" json:"k9s"`
+	clientSettings data.ClientSettings
 }
 
-// NewConfig creates a new default config.
-func NewConfig(ks data.KubeSettings) *Config {
+func NewConfig(c data.ClientSettings) *Config {
 	return &Config{
-		settings: ks,
-		K9s:      NewK9s(nil, ks),
+		clientSettings: c,
+		Fivetran:       NewFivetran(c),
 	}
 }
 
-func NewK9s(conn client.Connection, ks data.KubeSettings) *K9s {
-	return &K9s{
-		RefreshRate:   defaultRefreshRate,
-		MaxConnRetry:  defaultMaxConnRetry,
-		ScreenDumpDir: AppDumpsDir,
-		Logger:        NewLogger(),
-		//Thresholds:    NewThreshold(),
-		//ShellPod:      NewShellPod(),
-		//ImageScans:    NewImageScans(),
-		//dir:           data.NewDir(AppContextsDir),
-		//conn:          conn,
-		ks: ks,
+func NewFivetran(c data.ClientSettings) *FivetranConfig {
+	return &FivetranConfig{
+		Logger:         NewLogger(),
+		clientSettings: c,
 	}
 }
 
@@ -85,4 +56,64 @@ type Logger struct {
 	SinceSeconds int64 `json:"sinceSeconds" yaml:"sinceSeconds"`
 	TextWrap     bool  `json:"textWrap" yaml:"textWrap"`
 	ShowTime     bool  `json:"showTime" yaml:"showTime"`
+}
+
+func (c *Config) Load(path string, force bool) error {
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+		if err := c.Save(force); err != nil {
+			return err
+		}
+	}
+	bb, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var errs error
+	//if err := data.JSONValidator.Validate(json.K9sSchema, bb); err != nil {
+	//	errs = errors.Join(errs, fmt.Errorf("k9s config file %q load failed:\n%w", path, err))
+	//}
+
+	var cfg Config
+	if err := yaml.Unmarshal(bb, &cfg); err != nil {
+		errs = errors.Join(errs, fmt.Errorf("main config.yaml load failed: %w", err))
+	}
+	//c.Merge(&cfg)
+
+	return errs
+}
+
+func (c *Config) Save(force bool) error {
+	//c.Validate()
+	if err := c.Fivetran.Save(force); err != nil {
+		return err
+	}
+	if _, err := os.Stat(AppConfigFile); errors.Is(err, fs.ErrNotExist) {
+		return c.SaveFile(AppConfigFile)
+	}
+
+	return nil
+}
+
+func (f *FivetranConfig) Save(force bool) error {
+	if f.getActiveConfig() == nil {
+		log.Warn().Msgf("Save failed. no active config detected")
+		return nil
+	}
+	path := filepath.Join(
+		AppContextsDir,
+		data.SanitizeContextSubpath(f.activeConfig.Context.GetClusterName(), f.getActiveContextName()),
+		data.MainConfigFile,
+	)
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) || force {
+		return f.dir.Save(path, f.getActiveConfig())
+	}
+
+	return nil
+}
+
+func (f *FivetranConfig) getActiveConfig() *data.Config {
+	//f.mx.RLock()
+	//defer f.mx.RUnlock()
+
+	return f.activeConfig
 }
