@@ -6,17 +6,17 @@ import (
 	"net/url"
 )
 
-type ResponseType int
+type ResponseType string
 
 const (
-	GroupsResponseType ResponseType = iota
-	Green
-	Blue
+	GroupsResponseType     ResponseType = "GroupsResponseType"
+	ConnectorsResponseType              = "ConnectorsResponseType"
 )
 
 type Response struct {
-	Type           ResponseType
-	GroupsResponse GroupsResponse
+	Type               ResponseType   `json:"type"`
+	GroupsResponse     GroupsData     `json:"GroupsResponse"`
+	ConnectorsResponse ConnectorsData `json:"ConnectorsResponse"`
 }
 
 type GroupItem struct {
@@ -40,13 +40,13 @@ type ConnectorItem struct {
 	Schema  string `json:"schema"`
 }
 
-type GroupConnectorsData struct {
+type ConnectorsData struct {
 	Items []ConnectorItem `json:"items"` // Changed to export the field and added JSON tag
 }
 
-type GroupConnectorsResponse struct {
-	Code string              `json:"code"`
-	Data GroupConnectorsData `json:"data"`
+type ConnectorsResponse struct {
+	Code CodeType       `json:"code"`
+	Data ConnectorsData `json:"data"`
 }
 
 type ConnectorConfig struct {
@@ -103,6 +103,11 @@ var validCodes = map[CodeType]CodeTypeInfo{
 	NotFound:   {IsError: true},
 	AuthFailed: {IsError: true},
 	Success:    {IsError: false},
+}
+
+var Resources = map[string]string{
+	"group":     "groups",
+	"connector": "connectors",
 }
 
 func (c *CodeType) UnmarshalJSON(b []byte) error {

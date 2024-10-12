@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fivetran/api"
 	"fivetran/internal/color"
@@ -15,19 +16,19 @@ func listCmd() *cobra.Command {
 		Short: "List resource",
 		Long:  "List API resources",
 		RunE: func(cmd *cobra.Command, args []string) error {
+
 			if resource, ok := cmd.Parent().Annotations["resource"]; ok {
-				response, err := api.ListResource(key, resource)
+				resources := append([]string{resource}, args...)
+				println(fmt.Sprintf("resources: %v", resources))
+				response, err := api.ListResource(key, resources)
 				if err != nil {
 					return err
 				}
-				println(fmt.Sprintf("Response: %+v", response))
-				if response.Type == api.GroupsResponseType {
-					println(fmt.Sprintf("GroupsResponse: %+v", response.GroupsResponse))
-					for i := range response.GroupsResponse.Data.Items {
-						println(fmt.Sprintf("Item: %+v", response.GroupsResponse.Data.Items[i]))
-					}
+				jsonBytes, err := json.MarshalIndent(response, "", "\t")
+				if err != nil {
+					return err
 				}
-
+				fmt.Printf("%s\n", string(jsonBytes))
 				return nil
 			} else {
 				return errors.New("no resource")
@@ -44,6 +45,7 @@ func groupCmd() *cobra.Command {
 	command := cobra.Command{
 		Use: "group [command]",
 		//Annotations: map[string]string{"resource": "causeError"},
+		//Annotations: map[string]string{"resource": "connectors"},
 		Annotations: map[string]string{"resource": "groups"},
 		Short:       "Group resource",
 		Long:        "Group resource root command",

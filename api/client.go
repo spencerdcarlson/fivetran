@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
-func List(auth *Auth, resource string) ([]byte, error) {
-	url := fmt.Sprintf("https://api.fivetran.com/v1/%s", resource)
+func List(auth *Auth, resources []string) ([]byte, error) {
+	path := strings.Join(resources, "/")
+	url := fmt.Sprintf("https://api.fivetran.com/v1/%s", path)
 	fmt.Printf("URL: %s\n", url)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -33,7 +35,7 @@ func List(auth *Auth, resource string) ([]byte, error) {
 	}
 	var response GenericResponse
 	_ = json.Unmarshal(body, &response)
-	if IsGenericError(response) {
+	if IsError(response.Code) {
 		return nil, errors.New(fmt.Sprintf("API returned a generic error. %+v", response))
 	}
 	return body, nil
