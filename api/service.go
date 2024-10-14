@@ -68,6 +68,9 @@ func (c *CodeType) IsError() bool {
 func (r GroupsResponse) IsError() bool {
 	return r.Code.IsError()
 }
+func (r ConnectorSyncResponse) IsError() bool {
+	return r.Code.IsError()
+}
 
 func (r ConnectorsResponse) IsError() bool {
 	return r.Code.IsError()
@@ -91,6 +94,31 @@ func (r ConnectorResponse) GetResponse() interface{} {
 
 func (r ConnectorsResponse) GetResponse() interface{} {
 	return r
+}
+
+func (r ConnectorSyncResponse) GetResponse() interface{} {
+	return r
+}
+
+func SyncConnector(key string, connectorId string) (FiveTranResponse, error) {
+	auth, err := BuildAuth(key)
+	if err != nil {
+		return nil, err
+	}
+	body, err := SyncConnectorData(auth, connectorId)
+	if err != nil {
+		return nil, err
+	}
+	var response ConnectorSyncResponse
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		fmt.Println("Error making request:", err)
+		return nil, err
+	}
+	if response.IsError() {
+		return nil, errors.New(fmt.Sprintf("fivetran: '%s' Connector Sync Failed", connectorId))
+	}
+	return response, nil
 }
 
 func ListResource(key string, resources []string) (FiveTranResponse, error) {
@@ -193,11 +221,19 @@ func Refresh(apiKey string, groupName string, urlPart string) {
 						}
 
 						if foundConnector, err := ConnectorBySheetURL(connectorResults, urlPart); err == nil {
-							fmt.Printf("Found connector %v\n", foundConnector)
-							if jsonBytes, err := json.MarshalIndent(foundConnector, "\t", "\t"); err == nil {
-								fmt.Printf("Found Connector from Google Sheet URL\n\tURL Part: %s\n\tConnector: %s\n", urlPart, string(jsonBytes))
+							matches := []Connector{*foundConnector}
+							for _, connector := range matches {
+								fmt.Printf("Found connector %v\n", foundConnector)
+								if jsonBytes, err := json.MarshalIndent(foundConnector, "\t", "\t"); err == nil {
+									fmt.Printf("Found Connector from Google Sheet URL\n\tURL Part: %s\n\tConnector: %s\n", urlPart, string(jsonBytes))
+								}
+								fmt.Printf("Attempting to trigger sync.\n")
+								if result, err := SyncConnector(apiKey, connector.Id); err == nil {
+									if r, ok := result.GetResponse().(ConnectorSyncResponse); ok {
+										fmt.Printf("Succesfully synced connector %s\n", r.Message)
+									}
+								}
 							}
-							fmt.Printf("Attempting to trigger sync.\n")
 						}
 
 						//}

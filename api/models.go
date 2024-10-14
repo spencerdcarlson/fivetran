@@ -77,8 +77,8 @@ type ConnectorSyncRequest struct {
 }
 
 type ConnectorSyncResponse struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    CodeType `json:"code"`
+	Message string   `json:"message"`
 }
 
 type GenericResponse struct {
