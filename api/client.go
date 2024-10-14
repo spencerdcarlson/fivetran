@@ -35,7 +35,7 @@ func List(auth *Auth, resources []string) ([]byte, error) {
 	}
 	var response GenericResponse
 	_ = json.Unmarshal(body, &response)
-	if IsError(response.Code) {
+	if response.IsError() {
 		return nil, errors.New(fmt.Sprintf("API returned a generic error. %+v", response))
 	}
 	return body, nil

@@ -6,17 +6,12 @@ import (
 	"net/url"
 )
 
-type ResponseType string
+type Coded interface {
+	IsError() bool
+}
 
-const (
-	GroupsResponseType     ResponseType = "GroupsResponseType"
-	ConnectorsResponseType              = "ConnectorsResponseType"
-)
-
-type Response struct {
-	Type               ResponseType   `json:"type"`
-	GroupsResponse     GroupsData     `json:"GroupsResponse"`
-	ConnectorsResponse ConnectorsData `json:"ConnectorsResponse"`
+type FiveTranResponse interface {
+	GetResponse() interface{}
 }
 
 type GroupItem struct {
@@ -32,6 +27,10 @@ type GroupsData struct {
 type GroupsResponse struct {
 	Code CodeType   `json:"code"`
 	Data GroupsData `json:"data"`
+}
+
+type Filterable interface {
+	GetBy(string, string) interface{}
 }
 
 type ConnectorItem struct {
@@ -69,7 +68,7 @@ type Connector struct {
 }
 
 type ConnectorResponse struct {
-	Code string    `json:"code"`
+	Code CodeType  `json:"code"`
 	Data Connector `json:"data"`
 }
 
@@ -96,18 +95,23 @@ const (
 )
 
 type CodeTypeInfo struct {
-	IsError bool
+	Error bool
 }
 
 var validCodes = map[CodeType]CodeTypeInfo{
-	NotFound:   {IsError: true},
-	AuthFailed: {IsError: true},
-	Success:    {IsError: false},
+	NotFound:   {Error: true},
+	AuthFailed: {Error: true},
+	Success:    {Error: false},
 }
 
-var Resources = map[string]string{
-	"group":     "groups",
-	"connector": "connectors",
+type Resource struct {
+	Singular string `json:"singular"`
+	Plural   string `json:"plural"`
+}
+
+var Resources = [...]Resource{
+	{Singular: "group", Plural: "groups"},
+	{Singular: "connector", Plural: "connectors"},
 }
 
 func (c *CodeType) UnmarshalJSON(b []byte) error {

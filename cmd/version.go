@@ -7,20 +7,36 @@ import (
 	"fivetran/internal/color"
 	"fmt"
 	"github.com/spf13/cobra"
+	"strings"
 )
+
+func parseFilters(filters []string) map[string]string {
+	filterMap := make(map[string]string)
+	for _, filter := range filters {
+		keyValue := strings.SplitN(filter, "=", 2)
+		if len(keyValue) == 2 {
+			filterMap[keyValue[0]] = keyValue[1]
+		} else {
+			fmt.Printf("Ignoring invalid filter: %s\n", filter)
+		}
+	}
+	return filterMap
+}
 
 func listCmd() *cobra.Command {
 	var key string
+	var filters []string
 	command := cobra.Command{
-		Use:   "list",
+		Use:   "list [id] [resource]",
 		Short: "List resource",
 		Long:  "List API resources",
 		RunE: func(cmd *cobra.Command, args []string) error {
-
+			filterMap := parseFilters(filters)
+			println(fmt.Sprintf("filters: %v, map: %v", filters, filterMap))
 			if resource, ok := cmd.Parent().Annotations["resource"]; ok {
 				resources := append([]string{resource}, args...)
 				println(fmt.Sprintf("resources: %v", resources))
-				response, err := api.ListResource(key, resources)
+				response, err := api.ListResource(key, resources, filterMap)
 				if err != nil {
 					return err
 				}
@@ -36,6 +52,8 @@ func listCmd() *cobra.Command {
 		},
 	}
 	command.PersistentFlags().StringVar(&key, "key", "", "API key")
+	command.Flags().StringSliceVar(&filters, "filter", []string{}, "Filter in key=value format")
+
 	return &command
 }
 

@@ -36,44 +36,64 @@ func ConnectorBySheetURL(responses []ConnectorResponse, substr string) (*Connect
 	return nil, errors.New(fmt.Sprintf("fivetran: '%s' Connector not found", substr))
 }
 
-func IsError(code CodeType) bool {
-	info, ok := validCodes[code]
-	if !ok {
-		return false
-	}
-	return info.IsError
-}
-
-func IsArrayEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func NormalizeResource(resource string) (*string, *string) {
-	// Look up plural from singular
+func ToResource(resource string) (*Resource, error) {
 	r := strings.TrimSpace(strings.ToLower(resource))
-	if _, ok := Resources[r]; ok {
-		plural := Resources[r]
-		return &r, &plural
-	}
-	// Look up plural from plurals
-	for singular, plural := range Resources {
-		if plural == r {
-			return &singular, &plural
+	for i := range Resources {
+		if r == Resources[i].Singular || r == Resources[i].Plural {
+			return &Resources[i], nil
 		}
 	}
-	// No match
-	return nil, nil
+	return nil, errors.New("no resource found")
 }
 
-func ListResource(key string, resources []string) (*Response, error) {
+func (r GroupsResponse) GetBy(attr string, value string) interface{} {
+	var result GroupItem
+	for item := range r.Data.Items {
+		if strings.ToLower(strings.TrimSpace(attr)) == "name" {
+			if r.Data.Items[item].Name == value {
+				result = r.Data.Items[item]
+			}
+		}
+	}
+	return result
+}
+
+func (c *CodeType) IsError() bool {
+	if code, ok := validCodes[*c]; ok {
+		return code.Error
+	}
+	return false
+}
+
+func (r GroupsResponse) IsError() bool {
+	return r.Code.IsError()
+}
+
+func (r ConnectorsResponse) IsError() bool {
+	return r.Code.IsError()
+}
+
+func (r ConnectorResponse) IsError() bool {
+	return r.Code.IsError()
+}
+
+func (r GenericResponse) IsError() bool {
+	return r.Code.IsError()
+}
+
+func (r GroupsResponse) GetResponse() interface{} {
+	return r
+}
+
+func (r ConnectorResponse) GetResponse() interface{} {
+	return r
+}
+
+func (r ConnectorsResponse) GetResponse() interface{} {
+	return r
+}
+
+func ListResource(key string, resources []string) (FiveTranResponse, error) {
 	auth, err := BuildAuth(key)
 	if err != nil {
 		return nil, err
@@ -81,81 +101,109 @@ func ListResource(key string, resources []string) (*Response, error) {
 
 	// Replace with plural if exists, otherwise keep input
 	for i, item := range resources {
-		_, plural := NormalizeResource(item)
-		if plural != nil {
-			resources[i] = *plural
+		if r, err := ToResource(item); err == nil {
+			resources[i] = r.Plural
 		}
 	}
-
-	println(fmt.Sprintf("Resources %v", resources))
 
 	body, err := List(auth, resources)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get last resource in list of resources
-	resource := resources[len(resources)-1]
-	_, plural := NormalizeResource(resource)
-	if plural != nil {
-		r := *plural
-		if r == "groups" {
+	// If the last item on the resource path is not a valid resource then it is an ID
+	// and this is a single resource request
+	isSingle := false
+	if _, err := ToResource(resources[len(resources)-1]); err != nil {
+		isSingle = true
+	}
+
+	// Get last valid resource in list of resources
+	var resource *Resource
+	for i := len(resources) - 1; i >= 0; i-- {
+		if r, err := ToResource(resources[i]); err == nil {
+			resource = r
+			fmt.Printf("Found resource %v from resource path %v\n", resource, resources)
+			break
+		}
+	}
+
+	if resource != nil {
+		switch resource.Plural {
+		case "groups":
 			var response GroupsResponse
 			err = json.Unmarshal(body, &response)
 			if err != nil {
 				return nil, err
 			}
-			if IsError(response.Code) {
+			if response.IsError() {
 				return nil, errors.New(fmt.Sprintf("fivetran: '%s' Groups not found", response.Code))
 			}
-			return &Response{Type: GroupsResponseType, GroupsResponse: response.Data}, nil
-		} else if r == "connectors" {
+			return response, nil
+		case "connectors":
+			if isSingle {
+				var response ConnectorResponse
+				err = json.Unmarshal(body, &response)
+				if err != nil {
+					return nil, err
+				}
+				if response.IsError() {
+					return nil, errors.New(fmt.Sprintf("fivetran: '%s' Connector not found", response.Code))
+				}
+				return response, nil
+			}
 			var response ConnectorsResponse
 			err = json.Unmarshal(body, &response)
 			if err != nil {
 				return nil, err
 			}
-			if IsError(response.Code) {
+			if response.IsError() {
 				return nil, errors.New(fmt.Sprintf("fivetran: '%s' Connector not found", response.Code))
 			}
-			return &Response{Type: ConnectorsResponseType, ConnectorsResponse: response.Data}, nil
+			return response, nil
+		default:
+			println(fmt.Sprintf("fivetran: '%s' Resource not found", resource))
 		}
 	}
-	return nil, errors.New(fmt.Sprintf("The '%s' resource is not supported. response: %s", resource, string(body)))
+	return nil, errors.New(fmt.Sprintf("The %v resource path is not supported. response: %s", resources, string(body)))
 }
 
-func Refresh(apiKey string, groupName string) {
+func Refresh(apiKey string, groupName string, urlPart string) {
 	// Get all Groups
-	response, err := ListResource(apiKey, []string{"groups"})
-	if err != nil {
-		//return err
-	}
-	if response.Type == GroupsResponseType {
-		// Find group that matches groupName
-		item, err := GroupItemByName(response.GroupsResponse, groupName)
-		if err != nil {
+	if response, err := ListResource(apiKey, []string{"groups"}); err == nil {
+		if groups, ok := response.(GroupsResponse); ok {
+			if item, err := GroupItemByName(groups.Data, groupName); err == nil {
+				if jsonBytes, err := json.MarshalIndent(item, "\t", "\t"); err == nil {
+					fmt.Printf("Found Fivetran Group (Sink) from name:\n\tName: %s\n\tGroup: %s\n", groupName, string(jsonBytes))
+				}
+				if response, err := ListResource(apiKey, []string{"groups", item.Id, "connectors"}); err == nil {
+					if connectors, ok := response.(ConnectorsResponse); ok {
+						fmt.Printf("Found %d total connectors.\n", len(connectors.Data.Items))
+						googleSheetConnectors := ConnectorsByService(connectors, "google_sheets")
+						fmt.Printf("Found %d 'google_sheets' connectors.\n", len(googleSheetConnectors))
 
-		}
+						//for _, connector := range googleSheetConnectors {
+						var connectorResults []ConnectorResponse
+						connector := googleSheetConnectors[0]
+						fmt.Println("Checking google sheet connector")
+						if response, err := ListResource(apiKey, []string{"connectors", connector.Id}); err == nil {
+							if connector, ok := response.(ConnectorResponse); ok {
+								connectorResults = append(connectorResults, connector)
+							}
+						}
 
-		jsonBytes, err := json.MarshalIndent(item, "\t", "\t")
-		if err != nil {
-			fmt.Println("Error marshaling to JSON:", err)
-			return
-		}
-		fmt.Printf("Found Fivetran Group (Sink) from name:\n\tName: %s\n\tGroup: %s\n", groupName, string(jsonBytes))
+						if foundConnector, err := ConnectorBySheetURL(connectorResults, urlPart); err == nil {
+							fmt.Printf("Found connector %v\n", foundConnector)
+							if jsonBytes, err := json.MarshalIndent(foundConnector, "\t", "\t"); err == nil {
+								fmt.Printf("Found Connector from Google Sheet URL\n\tURL Part: %s\n\tConnector: %s\n", urlPart, string(jsonBytes))
+							}
+							fmt.Printf("Attempting to trigger sync.\n")
+						}
 
-		// Get Group connectors for that Group
-		response, err := ListResource(apiKey, []string{"groups", item.Id, "connectors"})
-		if err != nil {
-			//return err
-		}
-		if response.Type == ConnectorsResponseType {
-			if err != nil {
-				//return err
+						//}
+					}
+				}
 			}
-			//println(fmt.Sprintf("Group connectors %v", response))
-			fmt.Printf("Found %d total connectors.\n", len(response.ConnectorsResponse.Items))
 		}
-
 	}
 }
